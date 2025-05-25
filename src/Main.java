@@ -6,7 +6,7 @@ public class Main
     {
        Scanner input = new Scanner(System.in);
        ArrayList<String> users = new ArrayList<>();
-       String filePath = "D:\\users.txt";
+       String filePath = "D:\\IntelliJ Code\\BMI_based_Health_Trainer";
        try
        {
          Scanner fileScanner = new Scanner(new File(filePath));
