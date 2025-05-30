@@ -1,119 +1,116 @@
 import java.util.*;
 import java.io.*;
-public class Main
-{
-    public static void main(String[] args)
-    {
-       Scanner input = new Scanner(System.in);
-       ArrayList<String> users = new ArrayList<>();
-       String filePath = "D:\\IntelliJ Code\\BMI_based_Health_Trainer";
-       try
-       {
-         Scanner fileScanner = new Scanner(new File(filePath));
-         while(fileScanner.hasNextLine())
-         {
-             String line = fileScanner.nextLine().trim();
-             users.add(line);
-         }
-         fileScanner.close();
-       }
-       catch(FileNotFoundException e)
-       {
-           System.out.println("User file not found. Creating new file with default admin account...");
-           try {
-               FileWriter writer = new FileWriter(filePath);
-               writer.write("admin,admin123\n"); // default user
-               writer.close();
-               users.add("admin,admin123");
-           } catch (IOException ex) {
-               System.out.println("Error creating user file.");
-               return;
-           }
-       }
 
+public class Main {
+    static Scanner scanner = new Scanner(System.in);
 
-        int attempts = 0;
-       boolean loggedIn = false;
-        while (!loggedIn) {
-            System.out.println("\n=== BMI Health Trainer ===");
-            System.out.println("1. Login");
-            System.out.println("2. Signup");
-            System.out.print("Choose option (1 or 2): ");
-            String choice = input.nextLine();
+    public static void main(String[] args) {
+        if (!login()) return;
 
-            if (choice.equals("1")) {
-                while (attempts < 3 && !loggedIn) {
-                    System.out.print("Enter username: ");
-                    String username = input.nextLine();
+        int unit = getUnit();
+        double weight = getPositiveInput("Enter your weight:");
+        double height = getPositiveInput(unit == 1 ? "Enter your height (feet):" : "Enter your height (cm):");
+        double inches = 0;
 
-                    System.out.print("Enter password: ");
-                    String password = input.nextLine();
-
-                    loggedIn = login(users, username, password);
-
-                    if (!loggedIn) {
-                        attempts++;
-                        System.out.println("Login failed. Attempts left: " + (3 - attempts));
-                    }
-                }
-
-                if (loggedIn) {
-                    System.out.println("Login successful! Access granted.");
-                } else {
-                    System.out.println("Too many failed attempts. Access denied.");
-                }
-
-            } else if (choice.equals("2")) {
-                System.out.print("Choose a username: ");
-                String newUser = input.nextLine();
-
-                System.out.print("Choose a password: ");
-                String newPass = input.nextLine();
-
-                boolean exists = false;
-                for (String line : users) {
-                    String[] parts = line.split(",");
-                    if (parts.length == 2 && parts[0].equals(newUser)) {
-                        exists = true;
-                        break;
-                    }
-                }
-
-                if (exists) {
-                    System.out.println("Username already exists. Try another.");
-                } else {
-                    try {
-                        FileWriter writer = new FileWriter(filePath, true);
-                        writer.write(newUser + "," + newPass + "\n");
-                        writer.close();
-                        users.add(newUser + "," + newPass);
-                        System.out.println("Signup successful! You can now login.");
-                    } catch (IOException e) {
-                        System.out.println("Error writing to file.");
-                    }
-                }
-
-            } else {
-                System.out.println("Invalid option. Please enter 1 or 2.");
-            }
+        if (unit == 1) {
+            inches = getInches();
+            height = (height * 12 + inches) * 0.0254;
+            weight *= 0.453592;
+        } else {
+            height /= 100.0;
         }
 
-        input.close();
+        double bmi = calculateBMI(weight, height);
+        System.out.printf("Your BMI is: %.2f\n", bmi);
+        String category = getBMICategory(bmi);
+        System.out.println("Category: " + category);
+
+        displayFromFile("exercises.txt", category, "Exercises");
+        displayFromFile("suggestions.txt", category, "Suggestions");
     }
 
-    static boolean login(ArrayList<String> users, String username, String password)
-    {
-        for(String line : users)
-        {
-            String[] parts = line.split(",");
-            if(parts.length == 2)
-            {
-                String fileUser = parts[0];
-                String filePass = parts[1];
-                if(username.equals(fileUser) && password.equals(filePass))
+    static boolean login() {
+        System.out.print("Enter username: ");
+        String user = scanner.nextLine();
+        System.out.print("Enter password: ");
+        String pass = scanner.nextLine();
+        try (BufferedReader br = new BufferedReader(new FileReader("users.txt"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 2 && parts[0].equals(user) && parts[1].equals(pass)) {
                     return true;
+                }
             }
+        } catch (IOException e) {
+            System.out.println("Error reading users file.");
         }
+        System.out.println("Invalid login.");
         return false;
+    }
+
+    static int getUnit() {
+        while (true) {
+            try {
+                System.out.println("Choose system: 1 - US (lbs/feet), 2 - Metric (kg/cm)");
+                int unit = scanner.nextInt();
+                if (unit == 1 || unit == 2) return unit;
+            } catch (InputMismatchException e) {
+                scanner.nextLine();
+            }
+            System.out.println("Invalid input. Try again.");
+        }
+    }
+
+    static double getPositiveInput(String prompt) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                double val = scanner.nextDouble();
+                if (val > 0) return val;
+            } catch (InputMismatchException e) {
+                scanner.nextLine();
+            }
+            System.out.println("Invalid input. Try again.");
+        }
+    }
+
+    static double getInches() {
+        while (true) {
+            try {
+                System.out.print("Enter inches (0-11): ");
+                double val = scanner.nextDouble();
+                if (val >= 0 && val < 12) return val;
+            } catch (InputMismatchException e) {
+                scanner.nextLine();
+            }
+            System.out.println("Invalid input. Try again.");
+        }
+    }
+
+    static double calculateBMI(double weightKg, double heightMeters) {
+        return weightKg / (heightMeters * heightMeters);
+    }
+
+    static String getBMICategory(double bmi) {
+        if (bmi < 18.5) return "Underweight";
+        else if (bmi < 25) return "Normal";
+        else if (bmi < 30) return "Overweight";
+        else return "Obese";
+    }
+
+    static void displayFromFile(String filename, String category, String title) {
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith(category + ":")) {
+                    System.out.println("\n" + title + " for " + category + ":");
+                    System.out.println(line.split(":", 2)[1].trim());
+                    return;
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading " + filename);
+        }
     }
 }
