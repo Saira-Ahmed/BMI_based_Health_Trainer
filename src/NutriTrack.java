@@ -1,3 +1,6 @@
+
+//package com.team;
+
 import java.io.*;
 import java.util.*;
 
@@ -5,6 +8,8 @@ public class NutriTrack {
     static Scanner input = new Scanner(System.in);
     static String bmiCategory = "";
     static final String USER_FILE = "users.txt";
+    static double lastBmi = -1;
+    static String lastCategory = "";
 
     public static void main(String[] args) {
         while (true) {
@@ -16,6 +21,7 @@ public class NutriTrack {
                 case "1":
                     String username = login();
                     if (username != null) {
+                        loadLastBmi(username);
                         inputChoice(username);
                     }
                     break;
@@ -86,7 +92,7 @@ public class NutriTrack {
                     "1. Body Mass Index\n" +
                     "2. Exercises\n" +
                     "3. Nutrition Plan\n" +
-                    "4. View History\n" +
+                    "4. CompareProgress\n" +
                     "5. Return to the login page\n");
 
             String choose = input.nextLine();
@@ -96,40 +102,56 @@ public class NutriTrack {
                     double[] userData = getUserInput();
                     double bmi = calculateBMI(userData[0], userData[1]);
                     System.out.printf("Your BMI is: %.2f (%s)\n\n", bmi, bmiCategory);
+
                     saveUserHistory(username, userData[0], userData[1], bmi, bmiCategory);
+                    compareWithLastBmi(bmi, bmiCategory);
+                    lastBmi = bmi;
+                    lastCategory = bmiCategory;
                     break;
                 }
+
                 case "2":
-                    if (bmiCategory.isEmpty()) {
-                        System.out.println("⚠ Please calculate your BMI first!\n");
-                        break;
-                    }
-                    System.out.println("Let me give you some exercises:\n");
-                    displaySectionFromCombinedFile(bmiCategory, "Exercises");
-                    break;
                 case "3":
                     if (bmiCategory.isEmpty()) {
-                        System.out.println("⚠ Please calculate your BMI first!\n");
-                        break;
+                        System.out.print("You haven't calculated your BMI. Do you want to enter it manually? (yes/no): ");
+                        String response = input.nextLine().trim().toLowerCase();
+                        if (response.equals("yes")) {
+                            System.out.print("Enter your BMI value: ");
+                            try {
+                                double manualBmi = Double.parseDouble(input.nextLine());
+                                bmiCategory = getCategoryFromBMI(manualBmi);
+                                System.out.println("Your BMI category is set to: " + bmiCategory);
+                            } catch (NumberFormatException e) {
+                                System.out.println("Invalid input. Returning to menu.\n");
+                                break;
+                            }
+                        } else {
+                            System.out.println("⚠ Please calculate your BMI first!\n");
+                            break;
+                        }
                     }
-                    System.out.println("Let me give you a nutrition plan:\n");
-                    displaySectionFromCombinedFile(bmiCategory, "Nutrition");
+
+                    System.out.println((choose.equals("2") ? "Let me give you some exercises:" : "Let me give you a nutrition plan:") + "\n");
+                    displaySectionFromCombinedFile(bmiCategory, choose.equals("2") ? "Exercises" : "Nutrition");
                     break;
+
                 case "4":
-                    displayUserHistory(username);
+                    comparisonChoice(username);
                     break;
+
                 case "5":
                     System.out.println("Returning to the login page...\n");
                     return;
+
                 default:
                     System.out.println("Invalid option. Please choose a number between 1 and 5.\n");
             }
         }
     }
 
-
     static double[] getUserInput() {
         double weight = 0, heightMeters = 0;
+
         while (true) {
             System.out.println("Choose unit system:\n1. US (lbs, feet/inches)\n2. Metric (kg, cm)");
             String unit = input.nextLine();
@@ -162,17 +184,37 @@ public class NutriTrack {
 
     static double calculateBMI(double weightKg, double heightMeters) {
         double bmi = weightKg / (heightMeters * heightMeters);
-        if (bmi < 18.5) bmiCategory = "underweight";
-        else if (bmi < 25) bmiCategory = "normal";
-        else if (bmi < 30) bmiCategory = "overweight";
-        else bmiCategory = "obese";
+
+        if (bmi < 18.5) {
+            bmiCategory = "underweight";
+        } else if (bmi < 25) {
+            bmiCategory = "normal";
+        } else if (bmi < 30) {
+            bmiCategory = "overweight";
+        } else {
+            bmiCategory = "obese";
+        }
         return bmi;
+    }
+
+    static String getCategoryFromBMI(double bmi) {
+        if (bmi < 18.5) {
+            return "underweight";
+        }
+        if (bmi < 25) {
+            return "normal";
+        }
+        if (bmi < 30) {
+            return "overweight";
+        }
+        return "obese";
     }
 
     static void saveUserHistory(String username, double weight, double heightMeters, double bmi, String category) {
         String historyFile = "history.txt";
         String record = String.format("%s - %s, Weight: %.2f kg, Height: %.2f m, BMI: %.2f, Category: %s",
-                username, new java.util.Date(), weight, heightMeters, bmi, category);
+                username, new Date(), weight, heightMeters, bmi, category);
+
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(historyFile, true))) {
             bw.write(record);
             bw.newLine();
@@ -181,28 +223,44 @@ public class NutriTrack {
         }
     }
 
-
-    static void displayUserHistory(String username) {
+    static void loadLastBmi(String username) {
         String historyFile = "history.txt";
-        System.out.println("\nYour BMI and Weight History:\n");
         try (BufferedReader br = new BufferedReader(new FileReader(historyFile))) {
             String line;
-            boolean found = false;
+            String lastLine = null;
+
             while ((line = br.readLine()) != null) {
                 if (line.startsWith(username + " -")) {
-                    System.out.println(line);
-                    found = true;
+                    lastLine = line;
                 }
             }
-            if (!found) {
-                System.out.println("No history found for this user.");
+
+            if (lastLine != null) {
+                String[] parts = lastLine.split("BMI: ");
+                if (parts.length > 1) {
+                    String[] bmiParts = parts[1].split(",");
+                    lastBmi = Double.parseDouble(bmiParts[0]);
+                    lastCategory = bmiParts[1].split(":")[1].trim();
+                }
             }
-        } catch (IOException e) {
-            System.out.println("No history file found. Calculate your BMI to start tracking.");
+        } catch (Exception e) {
+            lastBmi = -1;
+            lastCategory = "";
+        }
+    }
+
+    static void compareWithLastBmi(double newBmi, String newCategory) {
+        if (lastBmi == -1) return;
+
+        System.out.printf("Previous BMI: %.2f (%s)\n", lastBmi, lastCategory);
+
+        if (!newCategory.equalsIgnoreCase(lastCategory)) {
+            System.out.println("Your BMI category changed from " + lastCategory + " to " + newCategory + "!");
+        } else {
+            System.out.println("Your BMI category remains the same: " + newCategory);
         }
         System.out.println();
     }
-
 
     static void displaySectionFromCombinedFile(String category, String section) {
         String fileName = category + ".txt";
@@ -215,20 +273,14 @@ public class NutriTrack {
             while ((line = br.readLine()) != null) {
                 line = line.trim();
 
-                // Check if it's the start of the section
                 if (line.equalsIgnoreCase(sectionHeader)) {
                     inSection = true;
                     continue;
                 }
 
-                // If inside the section, read content until another section starts
                 if (inSection) {
-                    if (line.startsWith("[") && line.endsWith("]")) {
-                        break; // next section starts
-                    }
-                    if (!line.isEmpty()) {
-                        System.out.println(line);
-                    }
+                    if (line.startsWith("[") && line.endsWith("]")) break;
+                    if (!line.isEmpty()) System.out.println(line);
                 }
             }
         } catch (IOException e) {
@@ -237,4 +289,42 @@ public class NutriTrack {
         System.out.println();
     }
 
+
+    static void comparisonChoice(String username) {
+        System.out.println("Choose how you'd like to enter BMI for comparison:\n1. Enter manually\n2. Calculate now");
+        String compareChoice = input.nextLine();
+
+        double currentBmi = -1;
+        String currentCategory = "";
+
+        switch (compareChoice) {
+            case "1":
+                try {
+                    System.out.print("Enter your BMI: ");
+                    currentBmi = Double.parseDouble(input.nextLine());
+                    currentCategory = getCategoryFromBMI(currentBmi);
+                    System.out.printf("Your BMI category is: %s\n", currentCategory);
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid BMI entered. Returning to menu.\n");
+                    return;
+                }
+                break;
+
+            case "2":
+                double[] userData = getUserInput();
+                currentBmi = calculateBMI(userData[0], userData[1]);
+                currentCategory = bmiCategory;
+                System.out.printf("Your BMI is: %.2f (%s)\n", currentBmi, currentCategory);
+                break;
+
+            default:
+                System.out.println("Invalid option. Returning to menu.\n");
+                return;
+        }
+
+        compareWithLastBmi(currentBmi, currentCategory);
+        lastBmi = currentBmi;
+        lastCategory = currentCategory;
+        saveUserHistory(username, 0, 0, currentBmi, currentCategory);
+    }
 }
